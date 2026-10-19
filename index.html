@@ -87,10 +87,7 @@ input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px}
 
 /* status band: the door sign */
 .band{--st:var(--free);background:var(--st);color:var(--band-ink);border-radius:18px;padding:clamp(20px,3.5vw,34px);display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:24px;align-items:stretch;transition:background-color .4s ease}
-.band[data-status="meeting"],.band[data-status="tentative"]{--st:var(--busy)}
-.band[data-status="focus"]{--st:var(--focus)}
-.band[data-status="ooo"]{--st:var(--ooo)}
-.band[data-status="off"],.band[data-status="lunch"],.band[data-status="rest"]{--st:var(--off)}
+.band:not([data-status="free"]){--st:var(--off)}
 .eyebrow{font-size:12px;letter-spacing:.16em;font-weight:500;opacity:.88;display:flex;align-items:center;gap:8px}
 .pulse{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 2.2s ease-out infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}70%{box-shadow:0 0 0 10px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
@@ -118,11 +115,8 @@ input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px}
 .hint{margin:0;font-size:13px;color:var(--muted)}
 
 /* kinds */
-.k-meeting{--c:var(--busy);--cf:var(--busy-fg)}
-.k-focus{--c:var(--focus);--cf:var(--focus-fg)}
-.k-tentative{--c:var(--busy);--cf:var(--busy-fg)}
-.k-ooo{--c:var(--ooo);--cf:var(--ooo-fg)}
-.k-rest{--c:var(--rest);--cf:var(--muted)}
+/* every unavailable span uses the same grey as the rest hours */
+.k-meeting,.k-focus,.k-tentative,.k-ooo,.k-rest{--c:var(--rest);--cf:var(--muted)}
 .pill{display:inline-flex;align-items:center;font-size:12px;line-height:1;padding:4px 8px;border-radius:999px;border:1px solid currentColor;color:var(--cf);white-space:nowrap}
 
 /* timeline strips */
@@ -137,12 +131,8 @@ input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px}
 .strip>.z-work{background:var(--free-tint)}
 .strip>.z-off{background:var(--rest)}
 .strip>.z-lunch{background:repeating-linear-gradient(135deg,var(--hatch) 0 3px,transparent 3px 7px),var(--surface-2)}
-.strip>.blk{top:4px;bottom:4px;border-radius:4px;background:var(--c);color:#FFFFFF;overflow:hidden;min-width:3px;box-shadow:0 0 0 1px var(--surface)}
-.strip.big>.blk{top:6px;bottom:6px}
-.strip>.blk.all{top:2px;bottom:2px;opacity:.88}
-.strip>.blk.k-tentative{background:repeating-linear-gradient(135deg,var(--busy-tint) 0 5px,var(--surface) 5px 10px);box-shadow:inset 0 0 0 1.5px var(--busy);color:var(--busy-fg)}
-.strip>.blk.k-rest{color:var(--ink)}
-.blk span{display:block;padding:0 7px;font-size:12px;font-weight:500;line-height:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.strip>.blk{top:0;bottom:0;background:var(--c);color:var(--ink);overflow:hidden;min-width:3px}
+.blk span{display:block;padding:0 7px;font-size:12px;font-weight:500;line-height:54px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .now-line{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink);z-index:2}
 
 /* today */
@@ -587,8 +577,7 @@ function renderWeek(data, today) {
   }
   $('#week').innerHTML = '<div class="sec-head"><h2>接下来 7 天</h2><span class="sec-meta">灰色为休息时间 · 列出 ' + data.hours.minSlot + ' 分钟以上的空闲时段</span></div>' +
     '<div class="wrow axis-row"><div></div>' + axisHTML(data) + '<div></div></div>' + rows +
-    '<div class="legend"><span><i class="lg-free"></i>空闲</span><span class="k-meeting"><i></i>会议</span><span class="k-focus"><i></i>专注</span>' +
-    '<span class="k-tentative"><i class="lg-tent"></i>待定</span><span class="k-ooo"><i></i>外出</span><span><i class="lg-rest"></i>休息 / 不可预约</span></div>';
+    '<div class="legend"><span><i class="lg-free"></i>空闲</span><span><i class="lg-rest"></i>忙碌 / 休息 / 不可预约</span></div>';
 }
 
 /* ---------- toast ---------- */
