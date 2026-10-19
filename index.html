@@ -1,0 +1,1108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Zhen 的忙闲看板</title>
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}[hidden]{display:none!important}</style>
+</head>
+<body>
+<style id="board-style">
+/* Layout: a meeting-room door sign on top (status band + next item), today's strip and agenda below, the coming week as stacked day strips; owner tools sit in a drawer at the end. */
+:root{
+  --bg:#EDF0F4;
+  --surface:#FFFFFF;
+  --surface-2:#F5F7FA;
+  --ink:#152030;
+  --muted:#5A6677;
+  --line:#D7DDE6;
+  --accent:#2445C4;
+  --accent-ink:#FFFFFF;
+  --free:#0C7A56;
+  --free-fg:#0C7A56;
+  --free-tint:#DCF0E7;
+  --busy:#BC3A2D;
+  --busy-fg:#B2362A;
+  --busy-tint:#F7DCD8;
+  --focus:#4A3DBA;
+  --focus-fg:#4A3DBA;
+  --ooo:#966000;
+  --ooo-fg:#8A5900;
+  --off:#536071;
+  --rest:#D3D8DF;
+  --band-ink:#FFFFFF;
+  --hatch:rgba(21,32,48,.09);
+  --shadow:0 1px 2px rgba(21,32,48,.05),0 10px 28px rgba(21,32,48,.06);
+  --f-display:"Barlow Condensed","Noto Sans SC",system-ui,sans-serif;
+  --f-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1218; --surface:#151C25; --surface-2:#1B2430; --ink:#E4E9F0; --muted:#93A0B1; --line:#283341;
+    --accent:#8EA3FF; --accent-ink:#0D1218;
+    --free:#15805C; --free-fg:#52C79C; --free-tint:#12302A;
+    --busy:#C1473A; --busy-fg:#F27E70; --busy-tint:#3E2220;
+    --focus:#5A4ED0; --focus-fg:#A99FFF;
+    --ooo:#8F5D0B; --ooo-fg:#E3A845;
+    --off:#3B4656; --rest:#2B3440; --band-ink:#FFFFFF; --hatch:rgba(228,233,240,.08); --shadow:none;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1218; --surface:#151C25; --surface-2:#1B2430; --ink:#E4E9F0; --muted:#93A0B1; --line:#283341;
+  --accent:#8EA3FF; --accent-ink:#0D1218;
+  --free:#15805C; --free-fg:#52C79C; --free-tint:#12302A;
+  --busy:#C1473A; --busy-fg:#F27E70; --busy-tint:#3E2220;
+  --focus:#5A4ED0; --focus-fg:#A99FFF;
+  --ooo:#8F5D0B; --ooo-fg:#E3A845;
+  --off:#3B4656; --rest:#2B3440; --band-ink:#FFFFFF; --hatch:rgba(228,233,240,.08); --shadow:none;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+#app{max-width:1080px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
+body.has-savebar #app{padding-bottom:128px}
+.boot{color:var(--muted)}
+button,input,select{font-family:inherit}
+input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
+.top h1{margin:0;font-weight:900;font-size:clamp(22px,3.2vw,30px);letter-spacing:.01em;line-height:1.2;text-wrap:balance}
+.intro{margin:4px 0 0;color:var(--muted)}
+.top-side{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px 18px}
+.clock{text-align:right}
+.clock-time{font-family:var(--f-display);font-weight:700;font-size:44px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.clock-meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+@media (max-width:600px){.clock{text-align:left}}
+
+/* flags */
+.flags{display:flex;flex-direction:column;gap:8px}
+.flag{margin:0;display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;padding:10px 14px;border-radius:10px;background:var(--surface);border:1px dashed var(--muted);font-size:14px}
+.flag b{font-weight:700}
+.flag-preview{border-style:solid;border-color:var(--accent)}
+.flag-stale{border-color:var(--ooo-fg)}
+
+/* status band: the door sign */
+.band{--st:var(--free);background:var(--st);color:var(--band-ink);border-radius:18px;padding:clamp(20px,3.5vw,34px);display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:24px;align-items:stretch;transition:background-color .4s ease}
+.band[data-status="meeting"],.band[data-status="tentative"]{--st:var(--busy)}
+.band[data-status="focus"]{--st:var(--focus)}
+.band[data-status="ooo"]{--st:var(--ooo)}
+.band[data-status="off"],.band[data-status="lunch"]{--st:var(--off)}
+.eyebrow{font-size:12px;letter-spacing:.16em;font-weight:500;opacity:.88;display:flex;align-items:center;gap:8px}
+.pulse{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 2.2s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}70%{box-shadow:0 0 0 10px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+.st-word{font-weight:900;font-size:clamp(52px,9.5vw,100px);line-height:1.02;margin:8px 0 6px;letter-spacing:.03em}
+.st-sub{font-family:var(--f-display);font-weight:600;font-size:clamp(20px,2.6vw,27px);line-height:1.2;font-variant-numeric:tabular-nums}
+.st-what{margin-top:12px;font-size:16px;font-weight:500;overflow-wrap:anywhere}
+.st-hint{margin-top:2px;font-size:14px;opacity:.86}
+.st-tier{display:inline-block;margin-top:14px;padding:7px 14px;border-radius:999px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.42);font-size:17px;font-weight:700;line-height:1.3}
+.next{background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
+.next-time{font-family:var(--f-display);font-weight:700;font-size:32px;line-height:1.1;font-variant-numeric:tabular-nums;margin-top:4px}
+.next-title{font-size:17px;font-weight:700;overflow-wrap:anywhere}
+.next-when{font-size:14px;opacity:.9}
+@media (max-width:720px){.band{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}.band{transition:none}}
+
+.notice{margin:0;padding:12px 16px;border-radius:12px;background:var(--surface);border:1px solid var(--line);font-size:15px;overflow-wrap:anywhere}
+.notice b{font-weight:700;margin-right:10px;color:var(--accent)}
+
+/* sections */
+.sec{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px clamp(16px,2.4vw,24px);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:14px;min-width:0}
+.sec-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px}
+.sec-head h2{margin:0;font-size:18px;font-weight:700}
+.sec-meta{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sec h3{margin:0 0 6px;font-size:13px;font-weight:500;color:var(--muted);letter-spacing:.06em}
+.hint{margin:0;font-size:13px;color:var(--muted)}
+
+/* kinds */
+.k-meeting{--c:var(--busy);--cf:var(--busy-fg)}
+.k-focus{--c:var(--focus);--cf:var(--focus-fg)}
+.k-tentative{--c:var(--busy);--cf:var(--busy-fg)}
+.k-ooo{--c:var(--ooo);--cf:var(--ooo-fg)}
+.pill{display:inline-flex;align-items:center;font-size:12px;line-height:1;padding:4px 8px;border-radius:999px;border:1px solid currentColor;color:var(--cf);white-space:nowrap}
+
+/* timeline strips */
+.axis{position:relative;height:16px;font:11px/16px var(--f-mono);color:var(--muted)}
+.axis span{position:absolute;top:0;transform:translateX(-50%)}
+.axis span:first-child{transform:none}
+.axis span:last-child{transform:translateX(-100%)}
+.strip{position:relative;height:30px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.strip.big{height:56px}
+.strip.rest{background:var(--rest)}
+.strip>i{position:absolute;top:0;bottom:0;display:block;font-style:normal}
+.strip>.z-work{background:var(--free-tint)}
+.strip>.z-off{background:var(--rest)}
+.strip>.z-lunch{background:repeating-linear-gradient(135deg,var(--hatch) 0 3px,transparent 3px 7px),var(--surface-2)}
+.strip>.blk{top:4px;bottom:4px;border-radius:4px;background:var(--c);color:#FFFFFF;overflow:hidden;min-width:3px;box-shadow:0 0 0 1px var(--surface)}
+.strip.big>.blk{top:6px;bottom:6px}
+.strip>.blk.all{top:2px;bottom:2px;opacity:.88}
+.strip>.blk.k-tentative{background:repeating-linear-gradient(135deg,var(--busy-tint) 0 5px,var(--surface) 5px 10px);box-shadow:inset 0 0 0 1.5px var(--busy);color:var(--busy-fg)}
+.blk span{display:block;padding:0 7px;font-size:12px;font-weight:500;line-height:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now-line{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink);z-index:2}
+
+/* today */
+.today-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:24px;margin-top:4px}
+@media (max-width:760px){.today-grid{grid-template-columns:minmax(0,1fr)}}
+.agenda{list-style:none;margin:0;padding:0}
+.ag{display:grid;grid-template-columns:100px auto minmax(0,1fr);gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.ag:last-child{border-bottom:0}
+.ag-time{font-family:var(--f-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.ag-title{overflow-wrap:anywhere}
+.ag.past{opacity:.5}
+.ag.cur .ag-title{font-weight:700}
+.ag.cur .ag-time{color:var(--cf);font-weight:500}
+.agenda .empty{color:var(--muted);padding:8px 0}
+.slots,.wslots{display:flex;flex-wrap:wrap;gap:8px}
+.slot{font:500 13px/1 var(--f-mono);padding:8px 10px;border-radius:8px;border:1px solid var(--free-fg);background:var(--free-tint);color:var(--free-fg);font-variant-numeric:tabular-nums;display:inline-flex;gap:6px;align-items:baseline}
+.slot small{font-size:11px;opacity:.75}
+.slots + .hint{margin-top:8px}
+
+/* week */
+.wrow{display:grid;grid-template-columns:76px minmax(0,1fr) 74px;gap:8px 14px;align-items:center;padding-block:10px;border-top:1px solid var(--line)}
+.wrow.axis-row{border-top:0;padding-block:0}
+.wlabel{display:flex;flex-direction:column;line-height:1.25}
+.wlabel b{font-weight:700}
+.wlabel span{font:12px var(--f-mono);color:var(--muted)}
+.wrow.rest .wlabel b{color:var(--muted);font-weight:500}
+.wsum{font-family:var(--f-display);font-weight:600;font-size:18px;color:var(--free-fg);text-align:right;font-variant-numeric:tabular-nums}
+.wsum.none{color:var(--muted);font-weight:500}
+.wslots{grid-column:2 / -1}
+.wslots .slot{padding:6px 8px;font-size:12px}
+@media (max-width:600px){
+  .wrow{grid-template-columns:minmax(0,1fr) auto}
+  .wrow .strip,.wrow .axis,.wslots{grid-column:1 / -1}
+  .wlabel{flex-direction:row;gap:8px;align-items:baseline}
+  .axis-row>div:empty{display:none}
+  .axis span.odd{display:none}
+}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted);padding-top:6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:16px;height:10px;border-radius:3px;display:inline-block;background:var(--c)}
+.legend i.lg-free{background:var(--free-tint);box-shadow:inset 0 0 0 1px var(--free-fg)}
+.legend i.lg-rest{background:var(--rest)}
+.legend i.lg-tent{background:repeating-linear-gradient(135deg,var(--busy-tint) 0 3px,var(--surface) 3px 6px);box-shadow:inset 0 0 0 1.5px var(--busy)}
+.legend i.lg-lunch{background:repeating-linear-gradient(135deg,var(--hatch) 0 2px,var(--surface-2) 2px 5px);box-shadow:inset 0 0 0 1px var(--line)}
+
+/* footer */
+.foot{font-size:12px;color:var(--muted);text-align:center}
+
+/* buttons */
+.btn{font:500 14px/1.2 var(--f-body);padding:9px 14px;border-radius:9px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer;white-space:nowrap}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{border-color:var(--ink);filter:none}
+.btn:disabled{opacity:.55;cursor:default}
+.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+
+/* editor drawer */
+.editor{border-style:dashed;border-color:var(--muted)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;font:500 14px var(--f-body);color:var(--muted);cursor:pointer;margin-bottom:-1px;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabpanel{display:flex;flex-direction:column;gap:16px;padding-top:4px}
+.form{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;align-items:end}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0;font-size:13px;color:var(--muted)}
+.field input,.field select{font:15px var(--f-body);color:var(--ink);background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:0;width:100%}
+.span-6{grid-column:span 6}.span-4{grid-column:span 4}.span-3{grid-column:span 3}.span-2{grid-column:span 2}
+@media (max-width:640px){.form{grid-template-columns:repeat(2,minmax(0,1fr))}.span-6,.span-4,.span-3{grid-column:span 2}.span-2{grid-column:span 1}}
+.form-checks{display:flex;flex-wrap:wrap;gap:8px 20px}
+.form-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.check{display:inline-flex;gap:8px;align-items:center;font-size:14px;color:var(--ink);cursor:pointer}
+.err{color:var(--busy-fg);font-size:13px;margin:0}
+.days{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:6px 16px;min-width:0}
+.days legend{font-size:13px;color:var(--muted);margin-bottom:6px;padding:0}
+.bulk{display:flex;flex-wrap:wrap;gap:8px}
+.bulk .btn{font-size:13px;padding:7px 12px}
+.ev-list{list-style:none;margin:0;padding:0}
+.ev-item{display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.ev-item:last-child{border-bottom:0}
+.ev-dot{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.ev-title{font-weight:500;overflow-wrap:anywhere}
+.ev-sched{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ev-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ev-acts .btn{font-size:13px;padding:6px 10px}
+@media (max-width:640px){.ev-item{grid-template-columns:10px minmax(0,1fr)}.ev-acts{grid-column:2;justify-content:flex-start}}
+.tag{display:inline-block;font-size:11px;font-weight:400;padding:1px 6px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted);margin-left:6px;vertical-align:2px}
+.past-list summary{cursor:pointer;color:var(--muted);font-size:14px}
+.drop{border:2px dashed var(--line);border-radius:12px;padding:24px 16px;text-align:center;display:flex;flex-direction:column;gap:12px;align-items:center}
+.drop p{margin:0}
+.drop.over{border-color:var(--accent);background:var(--surface-2)}
+.import-msg{padding:10px 14px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:14px}
+.import-msg p{margin:0}
+.howto summary{cursor:pointer;font-weight:500}
+.howto ol{padding-left:20px;margin:8px 0;display:flex;flex-direction:column;gap:4px}
+
+/* save bar + toast */
+.savebar{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -6px 24px rgba(0,0,0,.08);padding-top:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.savebar-in{max-width:1080px;margin:0 auto;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between}
+.savebar-acts{display:flex;gap:8px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;background:var(--ink);color:var(--bg);padding:12px 14px 12px 16px;border-radius:10px;width:max-content;max-width:min(560px,calc(100vw - 32px));font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:start}
+body.has-savebar .toast{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+.toast textarea{grid-column:1 / -1;font:13px/1.5 var(--f-mono);width:100%;min-height:72px;border-radius:6px;border:0;padding:8px;color:var(--ink);background:var(--surface);resize:vertical}
+.toast-x{background:none;border:0;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:0 2px;opacity:.75}
+</style>
+<div id="app"><p class="boot">正在载入日程…</p></div>
+<script type="application/json" id="board-data">{"v":1,"updatedAt":"2026-10-19T04:02:51Z","profile":{"name":"Zhen","intro":"实时忙闲状态 · 日程变动后这个链接自动同步","contact":"","notice":""},"hours":{"days":[1,2,3,4,5,6,7],"start":"08:00","end":"24:00","lunchStart":"","lunchEnd":"","minSlot":30},"events":[{"id":"m1","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-19","start":"14:30","end":"16:00","public":true},{"id":"m2","src":"manual","title":"Workshop","kind":"meeting","date":"2026-10-22","start":"09:30","end":"18:00","public":true},{"id":"m3","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-23","start":"16:00","end":"17:00","public":true}]}</script>
+<script id="board-main">
+(() => {
+'use strict';
+const FONT_HREF = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap';
+const APP_SHELL = '<div id="app"><p class="boot">正在载入日程…</p></div>';
+const FALLBACK_RESET = ':root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}';
+const STASH_KEY = 'availability-board-draft-v1';
+const TAB_KEY = 'availability-board-tab';
+const TZ_OFF = 480, MIN = 60000, DAY = 86400000;
+const KIND = {
+  ooo: { label: '外出', now: '外出中', priv: '外出', rank: 4 },
+  meeting: { label: '会议', now: '会议中', priv: '忙碌', rank: 3 },
+  focus: { label: '专注', now: '专注中', priv: '专注时段', rank: 2 },
+  tentative: { label: '待定', now: '可能在会', priv: '待定事项', rank: 1 }
+};
+const KIND_ORDER = ['meeting', 'focus', 'tentative', 'ooo'];
+const WD = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const WD1 = ['', '一', '二', '三', '四', '五', '六', '日'];
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clone = o => JSON.parse(JSON.stringify(o));
+const uid = () => 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = n => String(n).padStart(2, '0');
+const sameSet = (a, b) => a.length === b.length && a.every(x => b.indexOf(x) >= 0);
+
+/* ---------- time (all wall times are Beijing, UTC+8, no DST) ---------- */
+function bjParts(t) {
+  const d = new Date(t + TZ_OFF * MIN);
+  return { y: d.getUTCFullYear(), mo: d.getUTCMonth() + 1, d: d.getUTCDate(), dow: d.getUTCDay() || 7, min: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+function dkOf(t) { const p = bjParts(t); return p.y + '-' + pad(p.mo) + '-' + pad(p.d); }
+function dkUTC(dk) { const a = dk.split('-').map(Number); return Date.UTC(a[0], a[1] - 1, a[2]); }
+function addDays(dk, n) { const t = new Date(dkUTC(dk) + n * DAY); return t.getUTCFullYear() + '-' + pad(t.getUTCMonth() + 1) + '-' + pad(t.getUTCDate()); }
+function dowOf(dk) { return new Date(dkUTC(dk)).getUTCDay() || 7; }
+function daysBetween(a, b) { return Math.round((dkUTC(b) - dkUTC(a)) / DAY); }
+function epochOf(dk, min) { return dkUTC(dk) - TZ_OFF * MIN + min * MIN; }
+function daysInMonth(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+function hm(s) { if (!s) return 0; const a = s.split(':').map(Number); return a[0] * 60 + (a[1] || 0); }
+function fmtMin(m) { m = Math.round(m); if (m >= 1440) return '24:00'; return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
+function md(dk) { const a = dk.split('-'); return (+a[1]) + '/' + (+a[2]); }
+function dur(mins) {
+  mins = Math.max(0, Math.round(mins));
+  if (mins < 60) return mins + ' 分钟';
+  const h = Math.floor(mins / 60), r = mins % 60;
+  if (h >= 24) { const d = Math.floor(h / 24); return d + ' 天' + (h % 24 ? ' ' + (h % 24) + ' 小时' : ''); }
+  return h + ' 小时' + (r ? ' ' + r + ' 分' : '');
+}
+function hours1(mins) { const h = Math.round(mins / 6) / 10; return (h % 1 === 0 ? h.toFixed(0) : h.toFixed(1)) + 'h'; }
+function relDay(dk, today) {
+  const k = daysBetween(today, dk);
+  if (k === 0) return '今天'; if (k === 1) return '明天'; if (k === 2) return '后天';
+  return WD[dowOf(dk)] + ' ' + md(dk);
+}
+function fmtStamp(iso) { const t = Date.parse(iso || ''); if (!isFinite(t)) return ''; const p = bjParts(t); return p.mo + '/' + p.d + ' ' + fmtMin(p.min); }
+function localHint(now) {
+  const off = -new Date(now).getTimezoneOffset();
+  if (off === TZ_OFF) return '';
+  const d = new Date(now);
+  return ' · 你的当地时间 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+/* ---------- data ---------- */
+function normalize(d) {
+  d.v = 1;
+  d.profile = Object.assign({ name: 'Zhen', intro: '', contact: '', notice: '' }, d.profile || {});
+  d.hours = Object.assign({ days: [1, 2, 3, 4, 5], start: '09:00', end: '18:30', lunchStart: '12:00', lunchEnd: '13:00', minSlot: 30 }, d.hours || {});
+  d.events = Array.isArray(d.events) ? d.events.filter(e => e && e.date && KIND[e.kind]) : [];
+  if (!('updatedAt' in d)) d.updatedAt = null;
+  return d;
+}
+let state;
+try { state = JSON.parse(document.getElementById('board-data').textContent); } catch (e) { state = {}; }
+normalize(state);
+
+let draft = null, editorOpen = false, editingId = null, importMsg = '', canEdit = false, artifactNs = null, publishing = false;
+let edTab = 'events';
+try { edTab = localStorage.getItem(TAB_KEY) || 'events'; } catch (e) {}
+const importOpts = { titles: false, clearSample: true };
+
+function shownTitle(ev) { return ev.public !== false && ev.title ? ev.title : KIND[ev.kind].priv; }
+
+function mondayOf(dk) { return addDays(dk, 1 - dowOf(dk)); }
+function occursOn(ev, dk) {
+  if (ev.exdates && ev.exdates.indexOf(dk) >= 0) return false;
+  const r = ev.repeat;
+  if (!r) return ev.allDay ? (dk >= ev.date && dk <= (ev.endDate || ev.date)) : dk === ev.date;
+  if (dk < ev.date || (r.until && dk > r.until)) return false;
+  const iv = Math.max(1, r.interval || 1);
+  const days = r.days && r.days.length ? r.days : null;
+  if (r.freq === 'daily') {
+    if (days && days.indexOf(dowOf(dk)) < 0) return false;
+    return daysBetween(ev.date, dk) % iv === 0;
+  }
+  if (r.freq === 'weekly') {
+    if ((days || [dowOf(ev.date)]).indexOf(dowOf(dk)) < 0) return false;
+    return (daysBetween(mondayOf(ev.date), mondayOf(dk)) / 7) % iv === 0;
+  }
+  if (r.freq === 'monthly') {
+    const y0 = +ev.date.slice(0, 4), m0 = +ev.date.slice(5, 7), y = +dk.slice(0, 4), mo = +dk.slice(5, 7), d = +dk.slice(8, 10);
+    if (((y - y0) * 12 + (mo - m0)) % iv) return false;
+    if (r.nth) {
+      if (dowOf(dk) !== r.wd) return false;
+      return r.nth > 0 ? Math.ceil(d / 7) === r.nth : d + 7 > daysInMonth(y, mo);
+    }
+    return d === (r.monthDay || +ev.date.slice(8, 10));
+  }
+  return dk === ev.date;
+}
+function instancesOn(data, dk) {
+  const out = [];
+  for (const ev of data.events) {
+    if (!KIND[ev.kind] || !occursOn(ev, dk)) continue;
+    if (ev.allDay) out.push({ ev, s: 0, e: 1440, allDay: true });
+    else { const s = hm(ev.start), e = Math.min(1440, Math.max(hm(ev.end), s + 5)); out.push({ ev, s, e, allDay: false }); }
+  }
+  out.sort((a, b) => a.s - b.s || b.e - a.e);
+  return out;
+}
+function dayCtx(data, dk) {
+  const h = data.hours;
+  const ls = h.lunchStart && h.lunchEnd ? hm(h.lunchStart) : null, le = h.lunchStart && h.lunchEnd ? hm(h.lunchEnd) : null;
+  return { isWork: h.days.indexOf(dowOf(dk)) >= 0, ws: hm(h.start), we: hm(h.end), ls: ls != null && le > ls ? ls : null, le };
+}
+function freeSlots(data, dk, fromMin) {
+  const c = dayCtx(data, dk);
+  if (!c.isWork) return [];
+  const busy = instancesOn(data, dk).map(i => [i.s, i.e]);
+  if (c.ls != null) busy.push([c.ls, c.le]);
+  busy.sort((a, b) => a[0] - b[0]);
+  const minSlot = +data.hours.minSlot || 30, out = [];
+  let cur = Math.max(c.ws, fromMin || 0);
+  for (const [s, e] of busy) {
+    if (cur >= c.we) break;
+    if (e <= cur) continue;
+    if (s > cur) { const end = Math.min(s, c.we); if (end - cur >= minSlot) out.push([cur, end]); }
+    cur = Math.max(cur, e);
+  }
+  if (c.we - cur >= minSlot) out.push([cur, c.we]);
+  return out;
+}
+function statusAt(data, t) {
+  const dk = dkOf(t), m = bjParts(t).min, c = dayCtx(data, dk), inst = instancesOn(data, dk);
+  const cur = inst.filter(i => i.s <= m && m < i.e).sort((a, b) => KIND[b.ev.kind].rank - KIND[a.ev.kind].rank);
+  if (cur.length) return { code: cur[0].ev.kind, inst: cur[0], until: cur[0].e, m };
+  if (!c.isWork) return { code: 'off', label: '休息日', m };
+  if (m < c.ws) return { code: 'off', label: '休息中', m };
+  if (m >= c.we) return { code: 'off', label: '休息中', m };
+  if (c.ls != null && m >= c.ls && m < c.le) return { code: 'lunch', until: c.le, m };
+  let until = c.we;
+  for (const i of inst) if (i.s > m) { until = Math.min(until, i.s); break; }
+  if (c.ls != null && c.ls > m) until = Math.min(until, c.ls);
+  return { code: 'free', until, m };
+}
+function nextItem(data, t) {
+  const dk0 = dkOf(t), m = bjParts(t).min;
+  for (let k = 0; k < 21; k++) {
+    const dk = addDays(dk0, k);
+    for (const i of instancesOn(data, dk)) {
+      if (k === 0 && i.s <= m) continue;
+      if (k > 0 && i.allDay && !i.ev.repeat && occursOn(i.ev, dk0)) continue; /* same multi-day block we're already in */
+      return { dk, i, startT: epochOf(dk, i.s) };
+    }
+  }
+  return null;
+}
+function nextWorkStart(data, t) {
+  const dk0 = dkOf(t), m = bjParts(t).min;
+  for (let k = 0; k < 21; k++) {
+    const dk = addDays(dk0, k), c = dayCtx(data, dk);
+    if (!c.isWork || (k === 0 && m >= c.ws)) continue;
+    if (instancesOn(data, dk).some(i => i.allDay && i.ev.kind === 'ooo')) continue;
+    return { dk, min: c.ws };
+  }
+  return null;
+}
+function nextOcc(ev, from, horizon) { for (let k = 0; k < horizon; k++) { const dk = addDays(from, k); if (occursOn(ev, dk)) return dk; } return null; }
+function isPast(ev, today) {
+  if (!ev.repeat) return (ev.allDay ? (ev.endDate || ev.date) : ev.date) < today;
+  return !!(ev.repeat.until && ev.repeat.until < today);
+}
+
+/* ---------- board ---------- */
+function mountShell() {
+  $('#app').innerHTML =
+    '<header class="top"><div class="who"><h1 id="h-name"></h1><p class="intro" id="h-intro"></p></div>' +
+    '<div class="top-side"><div class="clock"><div class="clock-time" id="h-clock"></div><div class="clock-meta" id="h-date"></div></div>' +
+    '<button type="button" class="btn" id="open-editor" data-act="open-editor" hidden>编辑日程</button></div></header>' +
+    '<div class="flags" id="flags" hidden></div>' +
+    '<section class="band" id="band"></section>' +
+    '<p class="notice" id="notice" hidden></p>' +
+    '<section class="sec" id="today"></section>' +
+    '<section class="sec" id="week"></section>' +
+    '<section class="sec editor" id="editor" hidden></section>' +
+    '<footer class="foot" id="foot"></footer>' +
+    '<div class="savebar" id="savebar" hidden></div>' +
+    '<div class="toast" id="toast" role="status" hidden></div>';
+}
+
+/* strips always span the whole day; hours outside the open window are drawn grey */
+function viewWin() { return [0, 1440]; }
+function restText(data) {
+  const ws = hm(data.hours.start), we = hm(data.hours.end), parts = [];
+  if (ws > 0) parts.push('00:00–' + fmtMin(ws));
+  if (we < 1440) parts.push(fmtMin(we) + '–24:00');
+  return parts.join('、');
+}
+function axisHTML(data) {
+  const [vs, ve] = viewWin(data);
+  let h = '';
+  for (let m = Math.ceil(vs / 60) * 60; m <= ve; m += 60) {
+    h += '<span class="' + ((m / 60) % 2 ? 'odd' : '') + '" style="left:' + ((m - vs) / (ve - vs) * 100).toFixed(3) + '%">' + (m / 60) + '</span>';
+  }
+  return '<div class="axis" aria-hidden="true">' + h + '</div>';
+}
+function stripHTML(data, dk, nowT, big) {
+  const [vs, ve] = viewWin(data), span = ve - vs, c = dayCtx(data, dk);
+  const L = m => ((Math.min(ve, Math.max(vs, m)) - vs) / span * 100).toFixed(3) + '%';
+  const W = (a, b) => ((Math.min(ve, b) - Math.max(vs, a)) / span * 100).toFixed(3) + '%';
+  let h = '';
+  if (c.isWork) {
+    if (c.ws > vs) h += '<i class="z-off" style="left:0;width:' + W(vs, c.ws) + '" title="休息时间 ' + fmtMin(vs) + '–' + fmtMin(c.ws) + '"></i>';
+    if (c.we < ve) h += '<i class="z-off" style="left:' + L(c.we) + ';width:' + W(c.we, ve) + '" title="休息时间 ' + fmtMin(c.we) + '–' + fmtMin(ve) + '"></i>';
+    h += '<i class="z-work" style="left:' + L(c.ws) + ';width:' + W(c.ws, c.we) + '"></i>';
+    if (c.ls != null) h += '<i class="z-lunch" style="left:' + L(c.ls) + ';width:' + W(c.ls, c.le) + '" title="午休 ' + fmtMin(c.ls) + '–' + fmtMin(c.le) + '"></i>';
+  }
+  for (const i of instancesOn(data, dk)) {
+    if (i.e <= vs || i.s >= ve) continue;
+    const label = (i.allDay ? '全天' : fmtMin(i.s) + '–' + fmtMin(i.e)) + ' ' + KIND[i.ev.kind].label + ' · ' + shownTitle(i.ev);
+    h += '<i class="blk k-' + i.ev.kind + (i.allDay ? ' all' : '') + '" style="left:' + L(i.s) + ';width:' + W(i.s, i.e) + '" title="' + esc(label) + '">' +
+      (big && !i.allDay ? '<span>' + esc(shownTitle(i.ev)) + '</span>' : '') + '</i>';
+  }
+  if (nowT && dkOf(nowT) === dk) {
+    const m = bjParts(nowT).min;
+    if (m >= vs && m <= ve) h += '<b class="now-line" style="left:' + L(m) + '" title="现在"></b>';
+  }
+  return '<div class="strip' + (big ? ' big' : '') + (c.isWork ? '' : ' rest') + '" role="img" aria-label="' + esc(md(dk) + ' ' + WD[dowOf(dk)] + ' 忙闲时间条') + '">' + h + '</div>';
+}
+function slotBtn(dk, s) {
+  return '<span class="slot">' + fmtMin(s[0]) + '–' + fmtMin(s[1]) + '<small>' + hours1(s[1] - s[0]) + '</small></span>';
+}
+
+function render() {
+  const data = draft || state, now = Date.now(), today = dkOf(now), p = bjParts(now);
+  $('#h-name').textContent = (data.profile.name || '我') + ' 的忙闲看板';
+  $('#h-intro').textContent = data.profile.intro || '';
+  $('#h-intro').hidden = !data.profile.intro;
+  $('#h-clock').textContent = fmtMin(p.min);
+  $('#h-date').textContent = '北京时间 · ' + md(today) + ' ' + WD[p.dow] + localHint(now);
+  $('#open-editor').hidden = !canEdit || editorOpen;
+  renderFlags(data, now);
+  renderBand(data, now, today);
+  const n = $('#notice');
+  n.hidden = !data.profile.notice;
+  n.innerHTML = data.profile.notice ? '<b>公告</b>' + esc(data.profile.notice) : '';
+  renderToday(data, now, today);
+  renderWeek(data, today);
+  $('#foot').textContent = '时间均为北京时间（UTC+8）' + (restText(data) ? '，灰色为休息时间（' + restText(data) + '）' : '') + '。空闲时按距下一项的时间提示：30 分钟内快问快答，30–50 分钟简单沟通，50 分钟以上适合聊一聊。' + (data.updatedAt ? '日程更新于 ' + fmtStamp(data.updatedAt) + '。' : '日程尚未发布。');
+}
+
+function renderFlags(data, now) {
+  const f = [];
+  if (isDirty()) f.push(['preview', '预览中', '你看到的包含还没发布的修改，同事看到的仍是上一版。']);
+  if (data.events.some(e => e.src === 'sample')) {
+    f.push(['sample', '示例日程', canEdit ? '下面的事项是演示用的。点「编辑日程」从 Outlook 导入或手动添加，然后发布。' : '主人还没发布真实日程，下面的事项是演示用的。']);
+  }
+  const up = Date.parse(data.updatedAt || '');
+  if (isFinite(up) && now - up > 7 * DAY) f.push(['stale', '可能不是最新', '日程已经 ' + Math.floor((now - up) / DAY) + ' 天没更新，约之前最好先确认一下。']);
+  $('#flags').innerHTML = f.map(x => '<p class="flag flag-' + x[0] + '"><b>' + x[1] + '</b><span>' + esc(x[2]) + '</span></p>').join('');
+  $('#flags').hidden = !f.length;
+}
+
+function renderBand(data, now, today) {
+  const st = statusAt(data, now), nx = nextItem(data, now);
+  let word, sub, what = '', hint;
+  if (st.code === 'free') {
+    const left = st.until - st.m; /* minutes until the next item, or the grey rest hours if those come first */
+    word = '空闲'; sub = '空闲至 ' + fmtMin(st.until) + ' · 还有 ' + dur(left);
+    hint = left < 30 ? '可以快问快答' : left < 50 ? '可以简单沟通' : '很适合现在找我聊一聊';
+  }
+  else if (st.code === 'lunch') { word = '午休'; sub = fmtMin(st.until) + ' 回来 · 还有 ' + dur(st.until - st.m); hint = '消息会在午休后回复'; }
+  else if (st.code === 'off') {
+    word = st.label;
+    const ws = nextWorkStart(data, now);
+    sub = ws ? relDay(ws.dk, today) + ' ' + fmtMin(ws.min) + ' 开始' : '近期没有可联系的时间';
+    hint = '休息时间，消息会稍后回复';
+  } else {
+    const ev = st.inst.ev;
+    word = KIND[st.code].now;
+    if (st.inst.allDay) { const end = ev.repeat ? today : (ev.endDate || ev.date); sub = end > today ? '全天 · 至 ' + relDay(end, today) : '今天全天'; }
+    else sub = '至 ' + fmtMin(st.until) + ' · 还剩 ' + dur(st.until - st.m);
+    what = '正在：' + shownTitle(ev);
+    hint = { meeting: '会后回复消息', focus: '非紧急的事请先留言', tentative: '日程待定，可以先留言', ooo: '回复可能比较慢' }[st.code];
+  }
+  let nextHTML = '<div class="eyebrow">下一项</div>';
+  if (nx) {
+    const i = nx.i, mins = Math.round((nx.startT - now) / MIN);
+    const day = nx.dk === today ? '' : relDay(nx.dk, today) + ' ';
+    const time = i.allDay ? day + '全天' : day + fmtMin(i.s) + '–' + fmtMin(i.e);
+    const when = (mins <= 1 ? '马上开始' : mins < 1440 ? dur(mins) + '后' : relDay(nx.dk, today)) + ' · ' + KIND[i.ev.kind].label;
+    nextHTML += '<div class="next-time">' + esc(time) + '</div><div class="next-title">' + esc(shownTitle(i.ev)) + '</div><div class="next-when">' + esc(when) + '</div>';
+  } else nextHTML += '<div class="next-title">未来三周没有安排</div>';
+  const band = $('#band');
+  band.dataset.status = st.code;
+  band.innerHTML = '<div class="st"><div class="eyebrow"><span class="pulse" aria-hidden="true"></span>现在</div>' +
+    '<div class="st-word">' + esc(word) + '</div><div class="st-sub">' + esc(sub) + '</div>' +
+    (what ? '<div class="st-what">' + esc(what) + '</div>' : '') + '<div class="' + (st.code === 'free' ? 'st-tier' : 'st-hint') + '">' + esc(hint) + '</div></div>' +
+    '<div class="next">' + nextHTML + '</div>';
+}
+
+function renderToday(data, now, today) {
+  const c = dayCtx(data, today), m = bjParts(now).min, inst = instancesOn(data, today);
+  const meta = md(today) + ' ' + WD[dowOf(today)] + (c.isWork ? ' · 可联系 ' + fmtMin(c.ws) + '–' + fmtMin(c.we) : ' · 休息日');
+  const ag = inst.length ? inst.map(i => {
+    const cls = i.e <= m ? ' past' : (i.s <= m ? ' cur' : '');
+    return '<li class="ag k-' + i.ev.kind + cls + '"><span class="ag-time">' + (i.allDay ? '全天' : fmtMin(i.s) + '–' + fmtMin(i.e)) + '</span><span class="pill">' + KIND[i.ev.kind].label + '</span><span class="ag-title">' + esc(shownTitle(i.ev)) + '</span></li>';
+  }).join('') : '<li class="empty">今天没有安排</li>';
+  const slots = c.isWork ? freeSlots(data, today, Math.ceil(m / 15) * 15) : [];
+  const slotHTML = !c.isWork ? '<p class="hint">今天休息。</p>'
+    : slots.length ? '<div class="slots">' + slots.map(s => slotBtn(today, s)).join('') + '</div>'
+    : '<p class="hint">今天剩下的时间没有空闲时段了。</p>';
+  $('#today').innerHTML = '<div class="sec-head"><h2>今天</h2><span class="sec-meta">' + esc(meta) + '</span></div>' +
+    axisHTML(data) + stripHTML(data, today, now, true) +
+    '<div class="today-grid"><div><h3>今日安排</h3><ol class="agenda">' + ag + '</ol></div><div><h3>剩余空闲时段</h3>' + slotHTML + '</div></div>';
+}
+
+function renderWeek(data, today) {
+  let rows = '';
+  for (let k = 1; k <= 7; k++) {
+    const dk = addDays(today, k), c = dayCtx(data, dk), slots = c.isWork ? freeSlots(data, dk, 0) : [];
+    const freeMin = slots.reduce((a, s) => a + s[1] - s[0], 0);
+    const sum = !c.isWork ? '休息' : slots.length ? '空 ' + hours1(freeMin) : '已排满';
+    rows += '<div class="wrow' + (c.isWork ? '' : ' rest') + '"><div class="wlabel"><b>' + WD[dowOf(dk)] + '</b><span>' + md(dk) + '</span></div>' +
+      stripHTML(data, dk, null, false) + '<div class="wsum' + (slots.length ? '' : ' none') + '">' + sum + '</div>' +
+      (slots.length ? '<div class="wslots">' + slots.map(s => slotBtn(dk, s)).join('') + '</div>' : '') + '</div>';
+  }
+  $('#week').innerHTML = '<div class="sec-head"><h2>接下来 7 天</h2><span class="sec-meta">灰色为休息时间 · 列出 ' + data.hours.minSlot + ' 分钟以上的空闲时段</span></div>' +
+    '<div class="wrow axis-row"><div></div>' + axisHTML(data) + '<div></div></div>' + rows +
+    '<div class="legend"><span><i class="lg-free"></i>空闲</span><span class="k-meeting"><i></i>会议</span><span class="k-focus"><i></i>专注</span>' +
+    '<span class="k-tentative"><i class="lg-tent"></i>待定</span><span class="k-ooo"><i></i>外出</span><span><i class="lg-rest"></i>休息时间</span></div>';
+}
+
+/* ---------- toast ---------- */
+let toastTimer = null;
+function toast(msg, copyText) {
+  const el = $('#toast');
+  el.innerHTML = '<div>' + esc(msg) + '</div><button type="button" class="toast-x" data-act="toast-close" aria-label="关闭">×</button>' +
+    (copyText != null ? '<textarea id="toast-copy" readonly>' + esc(copyText) + '</textarea>' : '');
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  if (copyText != null) { const ta = $('#toast-copy'); ta.focus(); ta.select(); toastTimer = setTimeout(() => { el.hidden = true; }, 20000); }
+  else toastTimer = setTimeout(() => { el.hidden = true; }, 4500);
+}
+
+/* ---------- editor ---------- */
+function isDirty() { return !!draft && JSON.stringify(draft) !== JSON.stringify(state); }
+function writeStash() {
+  try {
+    if (isDirty()) localStorage.setItem(STASH_KEY, JSON.stringify({ base: state.updatedAt || null, data: draft }));
+    else localStorage.removeItem(STASH_KEY);
+  } catch (e) {}
+}
+function readStash() { try { return JSON.parse(localStorage.getItem(STASH_KEY) || 'null'); } catch (e) { return null; } }
+function clearStash() { try { localStorage.removeItem(STASH_KEY); } catch (e) {} }
+function markDirty() { writeStash(); updateSavebar(); }
+function changed() { markDirty(); renderEditor(); render(); }
+
+function updateSavebar() {
+  const sb = $('#savebar'), d = isDirty();
+  document.body.classList.toggle('has-savebar', d);
+  sb.hidden = !d;
+  if (!d) { sb.innerHTML = ''; return; }
+  sb.innerHTML = '<div class="savebar-in"><div><b>有未发布的修改</b><span class="hint"> · 同事看到的还是上一版</span></div>' +
+    '<div class="savebar-acts"><button type="button" class="btn ghost" data-act="discard"' + (publishing ? ' disabled' : '') + '>放弃修改</button>' +
+    '<button type="button" class="btn" data-act="publish"' + (publishing ? ' disabled' : '') + '>' + (publishing ? '正在发布…' : '发布更新') + '</button></div></div>';
+}
+
+function repeatText(ev) {
+  const r = ev.repeat, iv = r.interval || 1, num = (a, b) => a - b;
+  if (r.freq === 'daily') {
+    if (r.days && r.days.length) return sameSet(r.days, [1, 2, 3, 4, 5]) ? '每个工作日' : '每周' + r.days.slice().sort(num).map(d => WD1[d]).join('、');
+    return iv > 1 ? '每 ' + iv + ' 天' : '每天';
+  }
+  if (r.freq === 'weekly') {
+    const ds = (r.days && r.days.length ? r.days : [dowOf(ev.date)]).slice().sort(num).map(d => WD1[d]).join('、');
+    return (iv > 1 ? '每 ' + iv + ' 周的周' : '每周') + ds;
+  }
+  if (r.freq === 'monthly') {
+    const pre = iv > 1 ? '每 ' + iv + ' 个月' : '每月';
+    if (r.nth) return pre + (r.nth === -1 ? '最后一个' : '第 ' + r.nth + ' 个') + WD[r.wd];
+    return pre + ' ' + (r.monthDay || +ev.date.slice(8, 10)) + ' 日';
+  }
+  return '重复';
+}
+function schedText(ev) {
+  const t = ev.allDay ? '全天' : ev.start + '–' + ev.end;
+  if (!ev.repeat) {
+    return ev.allDay ? md(ev.date) + (ev.endDate && ev.endDate !== ev.date ? '–' + md(ev.endDate) : '') + ' 全天' : md(ev.date) + ' ' + WD[dowOf(ev.date)] + ' ' + t;
+  }
+  return repeatText(ev) + ' ' + t + ' · ' + md(ev.date) + ' 起' + (ev.repeat.until ? '，至 ' + md(ev.repeat.until) : '');
+}
+function repeatFormValue(ev) {
+  const r = ev.repeat;
+  if (!r) return '';
+  if ((r.interval || 1) !== 1) return 'keep';
+  const hasDays = r.days && r.days.length;
+  if (r.freq === 'weekly' && (!hasDays || (r.days.length === 1 && r.days[0] === dowOf(ev.date)))) return 'weekly';
+  if (r.freq === 'daily' && hasDays && sameSet(r.days, [1, 2, 3, 4, 5])) return 'workdays';
+  if (r.freq === 'daily' && !hasDays) return 'daily';
+  if (r.freq === 'monthly' && !r.nth && (r.monthDay || +ev.date.slice(8, 10)) === +ev.date.slice(8, 10)) return 'monthly';
+  return 'keep';
+}
+const tv = s => (s === '24:00' ? '23:59' : (s || ''));
+function defaultFormEv(today) {
+  const m = bjParts(Date.now()).min;
+  let s = Math.ceil((m + 1) / 30) * 30, date = today;
+  if (s > 1380) { s = hm(state.hours.start) || 540; date = addDays(today, 1); }
+  return { title: '', kind: 'meeting', date, start: fmtMin(s), end: fmtMin(Math.min(s + 60, 1439)), public: true };
+}
+
+function renderEditor() {
+  const el = $('#editor');
+  if (!canEdit || !editorOpen || !draft) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  const tabs = [['events', '事项'], ['import', '从 Outlook 导入'], ['settings', '看板设置']];
+  el.innerHTML = '<div class="sec-head"><h2>编辑日程</h2><button type="button" class="btn ghost" data-act="close-editor">收起</button></div>' +
+    '<p class="hint">修改会先存在这个浏览器里，点底部「发布更新」后同事才看得到。</p>' +
+    '<div class="tabs" role="tablist">' + tabs.map(t => '<button type="button" role="tab" class="tab" data-tab="' + t[0] + '" aria-selected="' + (edTab === t[0]) + '">' + t[1] + '</button>').join('') + '</div>' +
+    '<div class="tabpanel" role="tabpanel">' + (edTab === 'import' ? importPanel() : edTab === 'settings' ? settingsPanel() : eventsPanel()) + '</div>';
+  if (edTab === 'events') syncFormVisibility();
+}
+
+function eventsPanel() {
+  const today = dkOf(Date.now());
+  const ed = editingId ? draft.events.find(e => e.id === editingId) : null;
+  const f = ed || defaultFormEv(today);
+  const rv = ed ? repeatFormValue(ed) : '';
+  const opts = [['', '不重复'], ['weekly', '每周（同一天）'], ['workdays', '每个工作日'], ['daily', '每天'], ['monthly', '每月（同一日期）']];
+  if (rv === 'keep') opts.push(['keep', '保持原规则：' + repeatText(ed)]);
+  const form = '<form id="ev-form" class="form" novalidate>' +
+    '<label class="field span-3">标题<input id="f-title" maxlength="80" value="' + esc(f.title || '') + '" placeholder="例如：客户项目对齐会"></label>' +
+    '<label class="field span-3">类型<select id="f-kind">' + KIND_ORDER.map(k => '<option value="' + k + '"' + (f.kind === k ? ' selected' : '') + '>' + KIND[k].label + '</option>').join('') + '</select></label>' +
+    '<label class="field span-2">日期<input type="date" id="f-date" value="' + esc(f.date) + '"></label>' +
+    '<label class="field span-2 t-only">开始<input type="time" id="f-start" step="300" value="' + esc(tv(f.start)) + '"></label>' +
+    '<label class="field span-2 t-only">结束<input type="time" id="f-end" step="300" value="' + esc(tv(f.end)) + '"></label>' +
+    '<label class="field span-2 d-only">结束日期<input type="date" id="f-enddate" value="' + esc(f.endDate || f.date) + '"></label>' +
+    '<label class="field span-2">重复<select id="f-repeat">' + opts.map(o => '<option value="' + o[0] + '"' + (rv === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select></label>' +
+    '<label class="field span-2 r-only">重复截止（可空）<input type="date" id="f-until" value="' + esc((f.repeat && f.repeat.until) || '') + '"></label>' +
+    '<div class="span-6 form-checks"><label class="check"><input type="checkbox" id="f-allday"' + (f.allDay ? ' checked' : '') + '>全天</label>' +
+    '<label class="check"><input type="checkbox" id="f-public"' + (f.public !== false ? ' checked' : '') + '>对外显示标题（不勾选只显示「忙碌」）</label></div>' +
+    '<div class="span-6 form-actions"><button class="btn" type="submit">' + (ed ? '保存这条修改' : '添加事项') + '</button>' +
+    (ed ? '<button type="button" class="btn ghost" data-act="cancel-edit">取消编辑</button>' : '') + '<p class="err" id="f-err" role="alert"></p></div></form>';
+
+  const up = [], past = [];
+  for (const ev of draft.events) (isPast(ev, today) ? past : up).push({ ev, n: nextOcc(ev, today, 120) || '9999' });
+  up.sort((a, b) => (a.n < b.n ? -1 : a.n > b.n ? 1 : (a.ev.allDay ? 0 : hm(a.ev.start)) - (b.ev.allDay ? 0 : hm(b.ev.start))));
+  const nS = draft.events.filter(e => e.src === 'sample').length, nI = draft.events.filter(e => e.src === 'ics').length;
+  const bulk = (nS ? '<button type="button" class="btn ghost" data-act="clear-sample">清除示例数据（' + nS + '）</button>' : '') +
+    (nI ? '<button type="button" class="btn ghost" data-act="clear-ics">删除导入的事项（' + nI + '）</button>' : '') +
+    (past.length ? '<button type="button" class="btn ghost" data-act="clear-past">清理已结束的事项（' + past.length + '）</button>' : '');
+  const item = x => {
+    const ev = x.ev;
+    const tags = (ev.src === 'sample' ? '<span class="tag">示例</span>' : '') + (ev.src === 'ics' ? '<span class="tag">导入</span>' : '') + (ev.public === false ? '<span class="tag">不公开</span>' : '');
+    const nextTxt = ev.repeat && x.n !== '9999' ? ' · 下次 ' + relDay(x.n, today) : '';
+    return '<li class="ev-item k-' + ev.kind + '"><span class="ev-dot"></span><div><div class="ev-title">' + esc(ev.title || KIND[ev.kind].label) + tags + '</div>' +
+      '<div class="ev-sched">' + esc(KIND[ev.kind].label + ' · ' + schedText(ev) + nextTxt) + '</div></div>' +
+      '<div class="ev-acts"><button type="button" class="btn ghost" data-act="toggle-pub" data-id="' + esc(ev.id) + '">' + (ev.public === false ? '公开标题' : '隐藏标题') + '</button>' +
+      '<button type="button" class="btn ghost" data-act="edit" data-id="' + esc(ev.id) + '">编辑</button>' +
+      '<button type="button" class="btn ghost" data-act="del" data-id="' + esc(ev.id) + '">删除</button></div></li>';
+  };
+  return form + (bulk ? '<div class="bulk">' + bulk + '</div>' : '') +
+    '<div><h3>接下来的事项（' + up.length + '）</h3>' + (up.length ? '<ul class="ev-list">' + up.map(item).join('') + '</ul>' : '<p class="hint">还没有事项。用上面的表单添加，或去「从 Outlook 导入」。</p>') + '</div>' +
+    (past.length ? '<details class="past-list"><summary>已结束（' + past.length + '）</summary><ul class="ev-list">' + past.map(item).join('') + '</ul></details>' : '');
+}
+function syncFormVisibility() {
+  const ad = $('#f-allday'), rp = $('#f-repeat');
+  if (!ad || !rp) return;
+  document.querySelectorAll('#ev-form .t-only').forEach(n => { n.hidden = ad.checked; });
+  document.querySelectorAll('#ev-form .d-only').forEach(n => { n.hidden = !ad.checked || !!rp.value; });
+  document.querySelectorAll('#ev-form .r-only').forEach(n => { n.hidden = !rp.value; });
+}
+function readForm() {
+  const g = id => document.getElementById(id);
+  const ev = { title: g('f-title').value.trim(), kind: g('f-kind').value, date: g('f-date').value, public: g('f-public').checked };
+  if (!KIND[ev.kind]) ev.kind = 'meeting';
+  if (!ev.date) return { err: '请选择日期' };
+  const rp = g('f-repeat').value, until = g('f-until').value || null;
+  if (g('f-allday').checked) {
+    ev.allDay = true;
+    const ed = rp ? ev.date : (g('f-enddate').value || ev.date);
+    if (ed < ev.date) return { err: '结束日期不能早于开始日期' };
+    ev.endDate = ed;
+  } else {
+    const s = g('f-start').value, e = g('f-end').value;
+    if (!s || !e) return { err: '请填写开始和结束时间' };
+    if (hm(e) <= hm(s)) return { err: '结束时间要晚于开始时间' };
+    ev.start = s; ev.end = e;
+  }
+  const old = editingId ? draft.events.find(x => x.id === editingId) : null;
+  if (rp === 'weekly') ev.repeat = { freq: 'weekly', interval: 1, days: [dowOf(ev.date)] };
+  else if (rp === 'workdays') ev.repeat = { freq: 'daily', interval: 1, days: [1, 2, 3, 4, 5] };
+  else if (rp === 'daily') ev.repeat = { freq: 'daily', interval: 1 };
+  else if (rp === 'monthly') ev.repeat = { freq: 'monthly', interval: 1, monthDay: +ev.date.slice(8, 10) };
+  else if (rp === 'keep' && old && old.repeat) ev.repeat = clone(old.repeat);
+  if (ev.repeat) {
+    if (until && until < ev.date) return { err: '重复截止日期不能早于开始日期' };
+    if (until) ev.repeat.until = until; else delete ev.repeat.until;
+    if (old && old.exdates && old.date === ev.date && rp === repeatFormValue(old)) ev.exdates = old.exdates.slice();
+  }
+  return { ev };
+}
+
+function importPanel() {
+  return '<div class="drop" id="drop"><p><b>把 Outlook 导出的 .ics 日历文件拖到这里</b></p>' +
+    '<p class="hint">只读取你选的这个文件，不会连接你的邮箱或日历账号</p>' +
+    '<label class="btn">选择 .ics 文件<input type="file" id="ics-file" accept=".ics,text/calendar" hidden></label></div>' +
+    '<div class="form-checks"><label class="check"><input type="checkbox" id="ics-titles"' + (importOpts.titles ? ' checked' : '') + '>对外显示会议标题（默认只显示「忙碌」；标为私人的事项始终隐藏）</label>' +
+    '<label class="check"><input type="checkbox" id="ics-clear-sample"' + (importOpts.clearSample ? ' checked' : '') + '>同时清除示例数据</label></div>' +
+    (importMsg ? '<div class="import-msg">' + importMsg + '</div>' : '') +
+    '<details class="howto"><summary>怎么从 Outlook 导出 .ics</summary><ol>' +
+    '<li>Outlook 桌面版切到「日历」，点 文件 → 保存日历。</li>' +
+    '<li>点「更多选项」：日期范围选「接下来 30 天」或自定义；详细信息选「仅忙闲状态」或「有限详细信息」。</li>' +
+    '<li>保存得到 .ics 文件，拖到上面的框里。</li>' +
+    '<li>新导入会替换上一次导入的事项，手动添加的不受影响。检查「事项」页后点底部「发布更新」。</li></ol>' +
+    '<p class="hint">网页版或新版 Outlook 没有「保存日历」：可以把这周的会议直接发给 Claude，让它代你更新看板。</p></details>';
+}
+function settingsPanel() {
+  const p = draft.profile, h = draft.hours;
+  return '<div class="form settings">' +
+    '<label class="field span-2">显示名称<input id="s-name" maxlength="20" value="' + esc(p.name) + '"></label>' +
+    '<label class="field span-4">一句话介绍<input id="s-intro" maxlength="60" value="' + esc(p.intro) + '" placeholder="例如：实时忙闲状态"></label>' +
+    '<label class="field span-6">公告（可空）<input id="s-notice" maxlength="120" value="' + esc(p.notice) + '" placeholder="例如：本周四全天在客户现场，急事打电话"></label>' +
+    '<fieldset class="span-6 days"><legend>可联系的日子（没勾选的日子整天灰色）</legend>' + [1, 2, 3, 4, 5, 6, 7].map(d => '<label class="check"><input type="checkbox" class="s-day" id="s-day-' + d + '" value="' + d + '"' + (h.days.indexOf(d) >= 0 ? ' checked' : '') + '>' + WD[d] + '</label>').join('') + '</fieldset>' +
+    '<label class="field span-2">每天开始（之前为灰色）<input type="time" id="s-start" step="900" value="' + esc(h.start) + '"></label>' +
+    '<label class="field span-2">每天结束（23:59 = 到午夜）<input type="time" id="s-end" step="60" value="' + esc(tv(h.end)) + '"></label>' +
+    '<label class="field span-2">最短空闲时段<select id="s-min">' + [15, 30, 45, 60].map(v => '<option value="' + v + '"' + (+h.minSlot === v ? ' selected' : '') + '>' + v + ' 分钟</option>').join('') + '</select></label>' +
+    '<label class="field span-2">午休开始（可空）<input type="time" id="s-ls" step="900" value="' + esc(h.lunchStart || '') + '"></label>' +
+    '<label class="field span-2">午休结束<input type="time" id="s-le" step="900" value="' + esc(h.lunchEnd || '') + '"></label>' +
+    '</div><p class="err" id="s-err" role="alert"></p>';
+}
+function readSettings() {
+  const v = id => document.getElementById(id).value;
+  const start = v('s-start'), end = v('s-end') === '23:59' ? '24:00' : v('s-end'), ls = v('s-ls'), le = v('s-le');
+  let err = '';
+  if (!start || !end || hm(end) <= hm(start)) err = '结束时间要晚于开始时间';
+  else if (!!ls !== !!le) err = '午休开始和结束要一起填，或者都留空';
+  else if (ls && hm(le) <= hm(ls)) err = '午休结束要晚于开始';
+  document.getElementById('s-err').textContent = err;
+  const p = draft.profile, h = draft.hours;
+  p.name = v('s-name').trim(); p.intro = v('s-intro').trim(); p.notice = v('s-notice').trim();
+  h.days = Array.prototype.filter.call(document.querySelectorAll('.s-day'), x => x.checked).map(x => +x.value);
+  h.minSlot = +v('s-min') || 30;
+  if (!err) { h.start = start; h.end = end; h.lunchStart = ls || ''; h.lunchEnd = le || ''; }
+  markDirty(); render();
+}
+
+/* ---------- .ics import ---------- */
+function splitUnquoted(s, ch) {
+  const out = []; let q = false, cur = '';
+  for (const c of s) { if (c === '"') q = !q; if (c === ch && !q) { out.push(cur); cur = ''; } else cur += c; }
+  out.push(cur);
+  return out;
+}
+function colonAt(s) { let q = false; for (let i = 0; i < s.length; i++) { if (s[i] === '"') q = !q; else if (s[i] === ':' && !q) return i; } return -1; }
+function tzOffset(tzid, wall, unknownTz) {
+  if (!tzid) return TZ_OFF;
+  const s = tzid.toLowerCase();
+  if (/china|shanghai|beijing|chongqing|hong ?kong|taipei|singapore|urumqi|macau|utc\+0?8/.test(s)) return 480;
+  if (/^(utc|gmt|z|etc\/utc|etc\/gmt)$/.test(s)) return 0;
+  try {
+    const f = new Intl.DateTimeFormat('en-US', { timeZone: tzid, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+    const P = {}; f.formatToParts(wall).forEach(x => { P[x.type] = x.value; });
+    return Math.round((Date.UTC(+P.year, +P.month - 1, +P.day, (+P.hour) % 24, +P.minute) - wall) / MIN);
+  } catch (e) { unknownTz.add(tzid); return TZ_OFF; }
+}
+function icsTime(prop, unknownTz) {
+  const v = (prop.value || '').trim(), p = prop.params || {};
+  let m = /^(\d{4})(\d{2})(\d{2})$/.exec(v);
+  if (m) return { allDay: true, dk: m[1] + '-' + m[2] + '-' + m[3] };
+  m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})?(Z)?$/i.exec(v);
+  if (!m) return null;
+  if ((p.VALUE || '').toUpperCase() === 'DATE') return { allDay: true, dk: m[1] + '-' + m[2] + '-' + m[3] };
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  const t = wall - (m[7] ? 0 : tzOffset(p.TZID, wall, unknownTz)) * MIN;
+  return { allDay: false, t, dk: dkOf(t), min: bjParts(t).min };
+}
+function parseDuration(s) {
+  const m = /^([+-])?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/i.exec((s || '').trim());
+  if (!m || m[1] === '-') return null;
+  return (+m[2] || 0) * 10080 + (+m[3] || 0) * 1440 + (+m[4] || 0) * 60 + (+m[5] || 0);
+}
+const unesc = s => s.replace(/\\n/gi, ' ').replace(/\\([,;\\])/g, '$1');
+
+function parseICS(text, showTitles, today) {
+  const lines = text.replace(/\r\n?/g, '\n').replace(/\n[ \t]/g, '').split('\n');
+  const raws = []; let cur = null, nest = 0;
+  for (const line of lines) {
+    const t = line.trim();
+    if (/^BEGIN:VEVENT$/i.test(t)) { cur = {}; nest = 0; continue; }
+    if (/^END:VEVENT$/i.test(t)) { if (cur) raws.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    if (/^BEGIN:/i.test(t)) { nest++; continue; }
+    if (/^END:/i.test(t)) { nest = Math.max(0, nest - 1); continue; }
+    if (nest) continue;
+    const ci = colonAt(line); if (ci < 0) continue;
+    const parts = splitUnquoted(line.slice(0, ci), ';'), name = parts.shift().toUpperCase(), params = {};
+    for (const p of parts) { const k = p.indexOf('='); if (k > 0) params[p.slice(0, k).toUpperCase()] = p.slice(k + 1).replace(/^"(.*)"$/, '$1'); }
+    (cur[name] = cur[name] || []).push({ params, value: line.slice(ci + 1) });
+  }
+  const stats = { cancelled: 0, free: 0, past: 0, unsupported: 0, bad: 0 }, unknownTz = new Set(), items = [], overrideEx = new Map();
+  for (const r of raws) {
+    const gv = n => (r[n] ? r[n][0].value : '').trim();
+    if (!r.DTSTART) { stats.bad++; continue; }
+    const a = icsTime(r.DTSTART[0], unknownTz);
+    if (!a) { stats.bad++; continue; }
+    const rid = r['RECURRENCE-ID'] ? icsTime(r['RECURRENCE-ID'][0], unknownTz) : null;
+    const it = { r, gv, a, uid: gv('UID'), ridDk: rid ? rid.dk : null };
+    if (it.ridDk && it.uid) { if (!overrideEx.has(it.uid)) overrideEx.set(it.uid, []); overrideEx.get(it.uid).push(it.ridDk); }
+    items.push(it);
+  }
+  const DAYMAP = { MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 7 };
+  const out = [];
+  for (const it of items) {
+    const { r, gv, a } = it;
+    if (gv('STATUS').toUpperCase() === 'CANCELLED') { stats.cancelled++; continue; }
+    const busy = gv('X-MICROSOFT-CDO-BUSYSTATUS').toUpperCase(), transp = gv('TRANSP').toUpperCase();
+    if (busy === 'FREE' || busy === 'WORKINGELSEWHERE' || (!busy && transp === 'TRANSPARENT')) { stats.free++; continue; }
+    const kind = busy === 'OOF' ? 'ooo' : busy === 'TENTATIVE' ? 'tentative' : 'meeting';
+    const cls = gv('CLASS').toUpperCase(), title = unesc(gv('SUMMARY')).trim().slice(0, 80);
+    const ev = { id: uid(), src: 'ics', kind, title: title || KIND[kind].label, public: !!(showTitles && title && cls !== 'PRIVATE' && cls !== 'CONFIDENTIAL') };
+    let b = r.DTEND ? icsTime(r.DTEND[0], unknownTz) : null;
+    if (!b && r.DURATION) {
+      const d = parseDuration(gv('DURATION'));
+      if (d != null) b = a.allDay ? { allDay: true, dk: addDays(a.dk, Math.max(1, Math.round(d / 1440))) } : { allDay: false, t: a.t + d * MIN };
+    }
+    if (a.allDay) {
+      ev.allDay = true; ev.date = a.dk;
+      const endEx = b && b.dk ? b.dk : addDays(a.dk, 1);
+      ev.endDate = addDays(endEx, -1) < a.dk ? a.dk : addDays(endEx, -1);
+    } else {
+      let bt = b ? (b.allDay ? epochOf(b.dk, 0) : b.t) : a.t + 30 * MIN;
+      if (!(bt > a.t)) bt = a.t + 30 * MIN;
+      const endDk = dkOf(bt - 1);
+      ev.date = a.dk;
+      if (endDk !== a.dk && bt - a.t >= 20 * 3600000) { ev.allDay = true; ev.endDate = endDk; }
+      else if (endDk !== a.dk) { ev.start = fmtMin(a.min); ev.end = '24:00'; }
+      else { const em = bjParts(bt).min; ev.start = fmtMin(a.min); ev.end = em === 0 ? '24:00' : fmtMin(em); }
+    }
+    const rr = gv('RRULE');
+    if (rr && !it.ridDk) {
+      const o = {};
+      rr.split(';').forEach(kv => { const i = kv.indexOf('='); if (i > 0) o[kv.slice(0, i).toUpperCase()] = kv.slice(i + 1); });
+      const freq = (o.FREQ || '').toUpperCase(), rep = { freq: freq.toLowerCase(), interval: Math.max(1, parseInt(o.INTERVAL, 10) || 1) };
+      let ok = true;
+      if (freq === 'DAILY' || freq === 'WEEKLY') {
+        if (o.BYDAY) { rep.days = o.BYDAY.split(',').map(x => DAYMAP[x.replace(/^[+-]?\d+/, '').toUpperCase()]).filter(Boolean); if (!rep.days.length) delete rep.days; }
+      } else if (freq === 'MONTHLY') {
+        if (o.BYDAY) {
+          const mm = /^([+-]?\d)?(MO|TU|WE|TH|FR|SA|SU)$/i.exec(o.BYDAY);
+          const n = mm && mm[1] ? parseInt(mm[1], 10) : (o.BYSETPOS ? parseInt(o.BYSETPOS, 10) : null);
+          if (mm && n && ((n >= 1 && n <= 4) || n === -1)) { rep.nth = n; rep.wd = DAYMAP[mm[2].toUpperCase()]; } else ok = false;
+        } else {
+          rep.monthDay = o.BYMONTHDAY ? parseInt(o.BYMONTHDAY, 10) : +ev.date.slice(8, 10);
+          if (!(rep.monthDay >= 1 && rep.monthDay <= 31)) ok = false;
+        }
+      } else ok = false;
+      if (ok) {
+        if (o.UNTIL) { const u = icsTime({ params: {}, value: o.UNTIL }, unknownTz); if (u) rep.until = u.dk; }
+        ev.repeat = rep;
+        if (ev.allDay) ev.endDate = ev.date;
+        const cnt = parseInt(o.COUNT, 10);
+        if (cnt > 0 && !rep.until) {
+          let seen = 0;
+          for (let k = 0; k < 1500; k++) { const dk = addDays(ev.date, k); if (occursOn(ev, dk) && ++seen >= cnt) { rep.until = dk; break; } }
+        }
+        const ex = [];
+        (r.EXDATE || []).forEach(p => p.value.split(',').forEach(v => { const x = icsTime({ params: p.params, value: v }, unknownTz); if (x) ex.push(x.dk); }));
+        (overrideEx.get(it.uid) || []).forEach(dk => ex.push(dk));
+        if (ex.length) ev.exdates = Array.from(new Set(ex));
+      } else stats.unsupported++;
+    }
+    if (!ev.repeat) {
+      const last = ev.allDay ? ev.endDate : ev.date;
+      if (last < today || ev.date > addDays(today, 180)) { stats.past++; continue; }
+    } else if (ev.repeat.until && ev.repeat.until < today) { stats.past++; continue; }
+    out.push(ev);
+  }
+  return { events: out, stats, unknownTz: Array.from(unknownTz), series: out.filter(e => e.repeat).length, total: raws.length };
+}
+async function importFile(file) {
+  let text = '';
+  try { text = await file.text(); } catch (e) { importMsg = '<p class="err">读不了这个文件，请确认它是 .ics 日历文件。</p>'; renderEditor(); return; }
+  if (!/BEGIN:VCALENDAR/i.test(text)) { importMsg = '<p class="err">这不是 .ics 日历文件（文件里没有 BEGIN:VCALENDAR）。</p>'; renderEditor(); return; }
+  const today = dkOf(Date.now()), r = parseICS(text, importOpts.titles, today);
+  draft.events = draft.events.filter(e => e.src !== 'ics' && !(importOpts.clearSample && e.src === 'sample')).concat(r.events);
+  const skip = [];
+  if (r.stats.past) skip.push(r.stats.past + ' 个已经结束');
+  if (r.stats.free) skip.push(r.stats.free + ' 个标为空闲');
+  if (r.stats.cancelled) skip.push(r.stats.cancelled + ' 个已取消');
+  if (r.stats.bad) skip.push(r.stats.bad + ' 个时间读不出来');
+  let msg = '<p>从 ' + esc(file.name) + ' 读到 ' + r.total + ' 个事项，导入了 <b>' + r.events.length + '</b> 个' + (r.series ? '（其中 ' + r.series + ' 个是重复系列）' : '') + '。' +
+    (skip.length ? '跳过：' + skip.join('，') + '。' : '') + '</p>';
+  if (r.stats.unsupported) msg += '<p>' + r.stats.unsupported + ' 个按年或复杂规则重复的系列只保留了第一次，需要的话手动补上。</p>';
+  if (r.unknownTz.length) msg += '<p>这些时区没认出来，按北京时间处理：' + esc(r.unknownTz.join('、')) + '。</p>';
+  msg += '<p>到「事项」页检查一遍，没问题就点底部「发布更新」。</p>';
+  importMsg = msg;
+  editingId = null;
+  changed();
+}
+
+/* ---------- publish (the page is the record) ---------- */
+function findReset() {
+  const list = document.querySelectorAll('head style');
+  for (let i = 0; i < list.length; i++) { const t = list[i].textContent; if (/safe-area-inset/.test(t) && /\[hidden\]/.test(t)) return t; }
+  return FALLBACK_RESET;
+}
+function buildDocument(data) {
+  const json = JSON.stringify(data).replace(/</g, '\\u003c').split(String.fromCharCode(0x2028)).join('\\u2028').split(String.fromCharCode(0x2029)).join('\\u2029');
+  return '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>' + findReset() + '</style></head><body>' +
+    '<title>' + esc((data.profile.name || '我') + ' 的忙闲看板') + '</title>\n' +
+    '<meta name="claude:viewport-fit-sides" content="cover">\n' +
+    '<style id="board-style">' + document.getElementById('board-style').textContent + '</style>\n' +
+    APP_SHELL + '\n' +
+    '<script type="application/json" id="board-data">' + json + '<\/script>\n' +
+    '<script id="board-main">' + document.getElementById('board-main').textContent + '<\/script>' +
+    '</body></html>';
+}
+async function publishDraft() {
+  if (!artifactNs || publishing || !draft) return;
+  const next = normalize(clone(draft));
+  next.updatedAt = new Date().toISOString();
+  let html;
+  try { html = buildDocument(next); } catch (e) { toast('生成页面时出错：' + e.message); return; }
+  publishing = true; updateSavebar();
+  try {
+    await artifactNs.publish(html);
+    clearStash();
+    toast('已发布，页面正在载入新版本');
+  } catch (err) {
+    publishing = false;
+    const code = err && err.code;
+    if (code === 'conflict') { clearStash(); draft = null; toast('日程刚在别处更新过（可能是 Claude 帮你改的），页面会载入最新版本，请在新版本上重新修改。'); }
+    else if (['not_writer', 'not_granted', 'consent_required', 'capability_disabled', 'capability_removed', 'not_declared'].indexOf(code) >= 0) {
+      canEdit = false; editorOpen = false; draft = null; clearStash(); renderEditor(); render();
+      toast('这个页面在这里是只读的，发布不了修改。请以看板主人身份在 claude.ai 打开它。');
+    }
+    else if (code === 'rate_limited') toast('发布得太频繁了，过一分钟再试。');
+    else if (code === 'too_large') toast('日程数据太多，先清理已结束的事项再发布。');
+    else toast('发布没成功（' + (code || '未知原因') + '），稍后再试一次。');
+    updateSavebar();
+  }
+}
+
+/* ---------- events ---------- */
+function openEditor() {
+  if (!canEdit) return;
+  if (!draft) draft = normalize(clone(state));
+  editorOpen = true;
+  renderEditor(); render();
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  $('#editor').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
+}
+document.addEventListener('click', e => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) { edTab = tab.dataset.tab; try { localStorage.setItem(TAB_KEY, edTab); } catch (x) {} renderEditor(); return; }
+  const a = e.target.closest('[data-act]');
+  if (!a) return;
+  const id = a.dataset.id;
+  switch (a.dataset.act) {
+    case 'open-editor': openEditor(); break;
+    case 'close-editor': editorOpen = false; editingId = null; if (!isDirty()) draft = null; renderEditor(); render(); updateSavebar(); break;
+    case 'toast-close': $('#toast').hidden = true; break;
+    case 'publish': publishDraft(); break;
+    case 'discard': draft = editorOpen ? normalize(clone(state)) : null; editingId = null; importMsg = ''; clearStash(); renderEditor(); render(); updateSavebar(); toast('已放弃未发布的修改'); break;
+    case 'edit': editingId = id; edTab = 'events'; renderEditor(); { const t = $('#f-title'); if (t) { t.focus(); $('#ev-form').scrollIntoView({ block: 'nearest' }); } } break;
+    case 'cancel-edit': editingId = null; renderEditor(); break;
+    case 'del': draft.events = draft.events.filter(x => x.id !== id); if (editingId === id) editingId = null; changed(); break;
+    case 'toggle-pub': { const ev = draft.events.find(x => x.id === id); if (ev) { ev.public = ev.public === false; changed(); } break; }
+    case 'clear-sample': draft.events = draft.events.filter(x => x.src !== 'sample'); changed(); break;
+    case 'clear-ics': draft.events = draft.events.filter(x => x.src !== 'ics'); changed(); break;
+    case 'clear-past': { const today = dkOf(Date.now()); draft.events = draft.events.filter(x => !isPast(x, today)); changed(); break; }
+  }
+});
+const editorEl = () => $('#editor');
+document.addEventListener('submit', e => {
+  if (!e.target || e.target.id !== 'ev-form') return;
+  e.preventDefault();
+  const r = readForm();
+  if (r.err) { $('#f-err').textContent = r.err; return; }
+  const wasEditing = !!editingId;
+  if (editingId) {
+    const i = draft.events.findIndex(x => x.id === editingId);
+    if (i >= 0) { const old = draft.events[i]; r.ev.id = old.id; r.ev.src = old.src === 'ics' ? 'ics' : 'manual'; draft.events[i] = r.ev; }
+    editingId = null;
+  } else { r.ev.id = uid(); r.ev.src = 'manual'; draft.events.push(r.ev); }
+  changed();
+  toast(wasEditing ? '已更新这条事项（还没发布）' : '已添加（还没发布）');
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (!editorEl() || !editorEl().contains(t)) return;
+  if (t.id === 'f-allday' || t.id === 'f-repeat') syncFormVisibility();
+  else if (t.id === 'ics-file') { const f = t.files && t.files[0]; if (f) importFile(f); t.value = ''; }
+  else if (t.id === 'ics-titles') importOpts.titles = t.checked;
+  else if (t.id === 'ics-clear-sample') importOpts.clearSample = t.checked;
+  else if (t.closest('.settings')) readSettings();
+});
+document.addEventListener('input', e => { if (editorEl() && e.target.closest && e.target.closest('#editor .settings')) readSettings(); });
+document.addEventListener('dragover', e => {
+  if (!editorOpen) return;
+  e.preventDefault();
+  const d = e.target.closest && e.target.closest('#drop');
+  if (d) d.classList.add('over');
+});
+document.addEventListener('dragleave', e => { const d = e.target.closest && e.target.closest('#drop'); if (d) d.classList.remove('over'); });
+document.addEventListener('drop', e => {
+  if (!editorOpen) return;
+  e.preventDefault();
+  const d = e.target.closest && e.target.closest('#drop');
+  if (!d) return;
+  d.classList.remove('over');
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) importFile(f);
+});
+
+/* ---------- boot ---------- */
+async function initCaps() {
+  const c = window.claude;
+  if (!c || typeof c.use !== 'function') return;
+  let art = null, usr = null;
+  try { [art, usr] = await Promise.all([c.use('artifact'), c.use('user')]); } catch (e) { return; }
+  if (!art) return;
+  artifactNs = art;
+  let ok = false;
+  try { ok = usr ? await usr.canEdit() : false; } catch (e) { ok = false; }
+  if (!ok) return;
+  canEdit = true;
+  const st = readStash();
+  if (st && st.data && st.base === (state.updatedAt || null)) {
+    draft = normalize(st.data); editorOpen = true;
+    renderEditor(); render(); updateSavebar();
+    toast('已恢复你上次没发布的修改');
+  } else { clearStash(); render(); }
+}
+
+function loadFonts() {
+  /* injected from script so a blocked font host never holds up the first paint; every stack falls back to system faces */
+  try { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = FONT_HREF; document.head.appendChild(l); } catch (e) {}
+}
+loadFonts();
+mountShell();
+render();
+let lastMin = Math.floor(Date.now() / MIN);
+setInterval(() => { const mm = Math.floor(Date.now() / MIN); if (mm !== lastMin) { lastMin = mm; render(); } }, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+initCaps();
+})();
+</script>
+</body>
+</html>
