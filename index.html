@@ -90,7 +90,7 @@ input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px}
 .band[data-status="meeting"],.band[data-status="tentative"]{--st:var(--busy)}
 .band[data-status="focus"]{--st:var(--focus)}
 .band[data-status="ooo"]{--st:var(--ooo)}
-.band[data-status="off"],.band[data-status="lunch"]{--st:var(--off)}
+.band[data-status="off"],.band[data-status="lunch"],.band[data-status="rest"]{--st:var(--off)}
 .eyebrow{font-size:12px;letter-spacing:.16em;font-weight:500;opacity:.88;display:flex;align-items:center;gap:8px}
 .pulse{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 2.2s ease-out infinite}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}70%{box-shadow:0 0 0 10px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
@@ -122,6 +122,7 @@ input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px}
 .k-focus{--c:var(--focus);--cf:var(--focus-fg)}
 .k-tentative{--c:var(--busy);--cf:var(--busy-fg)}
 .k-ooo{--c:var(--ooo);--cf:var(--ooo-fg)}
+.k-rest{--c:var(--rest);--cf:var(--muted)}
 .pill{display:inline-flex;align-items:center;font-size:12px;line-height:1;padding:4px 8px;border-radius:999px;border:1px solid currentColor;color:var(--cf);white-space:nowrap}
 
 /* timeline strips */
@@ -140,6 +141,7 @@ input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px}
 .strip.big>.blk{top:6px;bottom:6px}
 .strip>.blk.all{top:2px;bottom:2px;opacity:.88}
 .strip>.blk.k-tentative{background:repeating-linear-gradient(135deg,var(--busy-tint) 0 5px,var(--surface) 5px 10px);box-shadow:inset 0 0 0 1.5px var(--busy);color:var(--busy-fg)}
+.strip>.blk.k-rest{color:var(--ink)}
 .blk span{display:block;padding:0 7px;font-size:12px;font-weight:500;line-height:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .now-line{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink);z-index:2}
 
@@ -245,7 +247,7 @@ body.has-savebar .toast{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 .toast-x{background:none;border:0;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:0 2px;opacity:.75}
 </style>
 <div id="app"><p class="boot">正在载入日程…</p></div>
-<script type="application/json" id="board-data">{"v":1,"updatedAt":"2026-10-19T04:02:51Z","profile":{"name":"Zhen","intro":"实时忙闲状态 · 日程变动后这个链接自动同步","contact":"","notice":""},"hours":{"days":[1,2,3,4,5,6,7],"start":"08:00","end":"24:00","lunchStart":"","lunchEnd":"","minSlot":30},"events":[{"id":"m1","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-19","start":"14:30","end":"16:00","public":true},{"id":"m2","src":"manual","title":"Workshop","kind":"meeting","date":"2026-10-22","start":"09:30","end":"18:00","public":true},{"id":"m3","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-23","start":"16:00","end":"17:00","public":true}]}</script>
+<script type="application/json" id="board-data">{"v":1,"updatedAt":"2026-10-19T04:17:18Z","profile":{"name":"Zhen","intro":"实时忙闲状态 · 日程变动后这个链接自动同步","contact":"","notice":""},"hours":{"days":[1,2,3,4,5,6,7],"start":"08:00","end":"24:00","lunchStart":"","lunchEnd":"","minSlot":30},"events":[{"id":"m1","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-19","start":"14:30","end":"16:00","public":true},{"id":"m2","src":"manual","title":"Workshop","kind":"meeting","date":"2026-10-22","start":"09:30","end":"18:00","public":true},{"id":"m3","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-23","start":"16:00","end":"17:00","public":true},{"id":"m4","src":"manual","title":"","kind":"rest","date":"2026-10-24","start":"14:00","end":"18:30","public":true},{"id":"m5","src":"manual","title":"","kind":"rest","date":"2026-10-25","start":"08:00","end":"15:30","public":true}]}</script>
 <script id="board-main">
 (() => {
 'use strict';
@@ -259,9 +261,10 @@ const KIND = {
   ooo: { label: '外出', now: '外出中', priv: '外出', rank: 4 },
   meeting: { label: '会议', now: '会议中', priv: '忙碌', rank: 3 },
   focus: { label: '专注', now: '专注中', priv: '专注时段', rank: 2 },
-  tentative: { label: '待定', now: '可能在会', priv: '待定事项', rank: 1 }
+  tentative: { label: '待定', now: '可能在会', priv: '待定事项', rank: 1 },
+  rest: { label: '休息', now: '不可预约', priv: '不可预约', rank: 4 }
 };
-const KIND_ORDER = ['meeting', 'focus', 'tentative', 'ooo'];
+const KIND_ORDER = ['meeting', 'focus', 'tentative', 'ooo', 'rest'];
 const WD = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const WD1 = ['', '一', '二', '三', '四', '五', '六', '日'];
 
@@ -538,7 +541,7 @@ function renderBand(data, now, today) {
     if (st.inst.allDay) { const end = ev.repeat ? today : (ev.endDate || ev.date); sub = end > today ? '全天 · 至 ' + relDay(end, today) : '今天全天'; }
     else sub = '至 ' + fmtMin(st.until) + ' · 还剩 ' + dur(st.until - st.m);
     what = '正在：' + shownTitle(ev);
-    hint = { meeting: '会后回复消息', focus: '非紧急的事请先留言', tentative: '日程待定，可以先留言', ooo: '回复可能比较慢' }[st.code];
+    hint = { meeting: '会后回复消息', focus: '非紧急的事请先留言', tentative: '日程待定，可以先留言', ooo: '回复可能比较慢', rest: '这段时间不方便沟通' }[st.code];
   }
   let nextHTML = '<div class="eyebrow">下一项</div>';
   if (nx) {
@@ -585,7 +588,7 @@ function renderWeek(data, today) {
   $('#week').innerHTML = '<div class="sec-head"><h2>接下来 7 天</h2><span class="sec-meta">灰色为休息时间 · 列出 ' + data.hours.minSlot + ' 分钟以上的空闲时段</span></div>' +
     '<div class="wrow axis-row"><div></div>' + axisHTML(data) + '<div></div></div>' + rows +
     '<div class="legend"><span><i class="lg-free"></i>空闲</span><span class="k-meeting"><i></i>会议</span><span class="k-focus"><i></i>专注</span>' +
-    '<span class="k-tentative"><i class="lg-tent"></i>待定</span><span class="k-ooo"><i></i>外出</span><span><i class="lg-rest"></i>休息时间</span></div>';
+    '<span class="k-tentative"><i class="lg-tent"></i>待定</span><span class="k-ooo"><i></i>外出</span><span><i class="lg-rest"></i>休息 / 不可预约</span></div>';
 }
 
 /* ---------- toast ---------- */
