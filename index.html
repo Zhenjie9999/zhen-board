@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Zhen 的忙闲看板</title>
+<title>袁振杰的忙闲看板</title>
 <style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}[hidden]{display:none!important}</style>
 </head>
 <body>
@@ -237,7 +237,7 @@ body.has-savebar .toast{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
 .toast-x{background:none;border:0;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:0 2px;opacity:.75}
 </style>
 <div id="app"><p class="boot">正在载入日程…</p></div>
-<script type="application/json" id="board-data">{"v":1,"updatedAt":"2026-10-19T04:17:18Z","profile":{"name":"Zhen","intro":"实时忙闲状态 · 日程变动后这个链接自动同步","contact":"","notice":""},"hours":{"days":[1,2,3,4,5,6,7],"start":"08:00","end":"24:00","lunchStart":"","lunchEnd":"","minSlot":30},"events":[{"id":"m1","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-19","start":"14:30","end":"16:00","public":true},{"id":"m2","src":"manual","title":"Workshop","kind":"meeting","date":"2026-10-22","start":"09:30","end":"18:00","public":true},{"id":"m3","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-23","start":"16:00","end":"17:00","public":true},{"id":"m4","src":"manual","title":"","kind":"rest","date":"2026-10-24","start":"14:00","end":"18:30","public":true},{"id":"m5","src":"manual","title":"","kind":"rest","date":"2026-10-25","start":"08:00","end":"15:30","public":true}]}</script>
+<script type="application/json" id="board-data">{"v":1,"updatedAt":"2026-10-19T04:17:18Z","profile":{"name":"袁振杰","intro":"实时忙闲状态 · 日程变动后这个链接自动同步","contact":"","notice":""},"hours":{"days":[1,2,3,4,5,6,7],"start":"08:00","end":"24:00","lunchStart":"","lunchEnd":"","minSlot":30},"events":[{"id":"m1","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-19","start":"14:30","end":"16:00","public":true},{"id":"m2","src":"manual","title":"Workshop","kind":"meeting","date":"2026-10-22","start":"09:30","end":"18:00","public":true},{"id":"m3","src":"manual","title":"Presentation","kind":"meeting","date":"2026-10-23","start":"16:00","end":"17:00","public":true},{"id":"m4","src":"manual","title":"","kind":"rest","date":"2026-10-24","start":"14:00","end":"18:30","public":true},{"id":"m5","src":"manual","title":"","kind":"rest","date":"2026-10-25","start":"08:00","end":"15:30","public":true}]}</script>
 <script id="board-main">
 (() => {
 'use strict';
@@ -304,7 +304,7 @@ function localHint(now) {
 /* ---------- data ---------- */
 function normalize(d) {
   d.v = 1;
-  d.profile = Object.assign({ name: 'Zhen', intro: '', contact: '', notice: '' }, d.profile || {});
+  d.profile = Object.assign({ name: '袁振杰', intro: '', contact: '', notice: '' }, d.profile || {});
   d.hours = Object.assign({ days: [1, 2, 3, 4, 5], start: '09:00', end: '18:30', lunchStart: '12:00', lunchEnd: '13:00', minSlot: 30 }, d.hours || {});
   d.events = Array.isArray(d.events) ? d.events.filter(e => e && e.date && KIND[e.kind]) : [];
   if (!('updatedAt' in d)) d.updatedAt = null;
@@ -483,7 +483,7 @@ function slotBtn(dk, s) {
 
 function render() {
   const data = draft || state, now = Date.now(), today = dkOf(now), p = bjParts(now);
-  $('#h-name').textContent = (data.profile.name || '我') + ' 的忙闲看板';
+  $('#h-name').textContent = (data.profile.name || '我') + '的忙闲看板';
   $('#h-intro').textContent = data.profile.intro || '';
   $('#h-intro').hidden = !data.profile.intro;
   $('#h-clock').textContent = fmtMin(p.min);
@@ -957,7 +957,7 @@ function findReset() {
 function buildDocument(data) {
   const json = JSON.stringify(data).replace(/</g, '\\u003c').split(String.fromCharCode(0x2028)).join('\\u2028').split(String.fromCharCode(0x2029)).join('\\u2029');
   return '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>' + findReset() + '</style></head><body>' +
-    '<title>' + esc((data.profile.name || '我') + ' 的忙闲看板') + '</title>\n' +
+    '<title>' + esc((data.profile.name || '我') + '的忙闲看板') + '</title>\n' +
     '<meta name="claude:viewport-fit-sides" content="cover">\n' +
     '<style id="board-style">' + document.getElementById('board-style').textContent + '</style>\n' +
     APP_SHELL + '\n' +
